@@ -48,7 +48,7 @@ class RoutingTable
      */
     addReverseRoutes(path: string, lifetime = 30) 
     {
-        // The path looks like this "E3*,E5*,E9*,ANY2-1,XYZ*"
+        // The path looks like this "E3*,E5*,E9*,?2-1,XYZ*"
         // This means that we have a route to E3 via E5 -> E9 -> XYZ
 
         //  find the hops that have not been processed yet
@@ -72,7 +72,7 @@ class RoutingTable
 
             // and finally remember the route if it is more than 1 hop (then it would be direct)
             // and if it does not contain the KEY
-            if (route.length > 0 && destination.includes("ANY") == false)
+            if (route.length > 0 && destination.includes("?") == false)
             {
                 this.addRoute(destination, route.join(","));
             }
@@ -144,7 +144,7 @@ class RoutingTable
   */
 class Mesh
 {
-    private routes = new RoutingTable("ANY3-3");
+    private routes = new RoutingTable("?3-3");
     private stationID:string; // Name of the mesh node
 
     /**
@@ -239,7 +239,7 @@ class Mesh
             }
 
             //  Used relay
-            if (hops[i].includes("ANY") && hops[i].substr(-2) == "-0") {
+            if (hops[i].includes("?") && hops[i].substr(-2) == "-0") {
                 lastUsed = Math.max(lastUsed, i)
             }
         }
@@ -266,7 +266,7 @@ class Mesh
             }
 
             // Should we act as a relay ?
-            if (hops[i].indexOf("ANY") >= 0) {
+            if (hops[i].indexOf("?") >= 0) {
                 //  Wait a little bit
                 basic.pause(Math.random() * 1000)
 
@@ -275,7 +275,7 @@ class Mesh
                 relayNow = parseInt(hops[i].slice(5).split("-")[1])
 
                 //  Insert ourself, decemrent the relay counter and retransmit the message
-                hops[i] = this.stationID + "*" + ",ANY" + relayMax + "-" + (relayNow - 1)
+                hops[i] = this.stationID + "*" + ",?" + relayMax + "-" + (relayNow - 1)
                 newMessage = hops.join(",") + ">" + destination + ":" + message
                 radio.sendString(newMessage)
 
@@ -293,16 +293,18 @@ let mesh = new Mesh("HG");
 radio.onReceivedString(onRadioReceivedString);
 function onRadioReceivedString(packet: string)
 {
+    console.log("recv>" + packet);
     mesh.processReceivedPacket(packet);
 }
 
 mesh.sendPacket = function (packet: string)
 {
+    console.log("send>" + packet);
     radio.sendString(packet);
 }
 
 // Simulate a received Package
-//mesh.processReceivedString("E3*,E5*,E9,ANY2-1,XYZ>R7:WASSUP");
+//mesh.processReceivedString("E3*,E5*,E9,?2-1,XYZ>R7:WASSUP");
 
 // Callback if the Mesh Network has received a Message
 // This function is called one per Message (which could on the layer below be more than one call)
@@ -314,5 +316,5 @@ mesh.onMessageReceived = function (source: string, payload: string) {
 
 // Send a test message
 input.onButtonPressed(Button.A, function on_button_pressed_a() {
-    mesh.sendMessage("HG", "Test123")
+    mesh.sendMessage("HG", "ABC")
 })
