@@ -144,7 +144,7 @@ class RoutingTable
   */
 class Mesh
 {
-    private routes = new RoutingTable("?3-3");
+    private routes:RoutungTable;
     private stationID:string; // Name of the mesh node
 
     /**
@@ -154,8 +154,18 @@ class Mesh
     constructor(stationID:string)
     {
         this.stationID = stationID;
+        this.setDefaultRoute("?3-3");
     }
 
+    /**
+    * Sets the default routing tbale. A call to this funtion will flush the current routing table
+    * and create a new one.
+    */
+    setDefaultRoute(defautRoute:string)
+    {
+        this.routes = new RoutingTable(defaultRoute);
+    }
+    
     /**
      * A simple function that allows to send a message to one microbit
      * 
