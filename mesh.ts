@@ -202,7 +202,7 @@ class Mesh {
         }
 
         message = header + payload;
-        radio.sendString(message)
+        this.sendPacket(message)
         return true;
     }
 
@@ -287,7 +287,7 @@ class Mesh {
                 newMessage = hops.join(",") + ">" + destination + ":" + message
 
                 // And send it
-                radio.sendString(newMessage)
+                this.sendPacket(newMessage)
 
                 // Since we have sent the message, we can stop processing the message further
                 break;
@@ -305,7 +305,7 @@ class Mesh {
                 //  Insert ourself, decemrent the relay counter and retransmit the message
                 hops[i] = this.stationID + "*" + ",?" + relayMax + "-" + (relayNow - 1)
                 newMessage = hops.join(",") + ">" + destination + ":" + message
-                radio.sendString(newMessage)
+                this.sendPacket(newMessage)
 
                 // Since we have relayed the message, we can stop processing the message further
                 break;
