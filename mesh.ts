@@ -1,14 +1,13 @@
+
 //----------------------------------------------------------------------------------------
 // A Simple routingtable implementation
 // ---------------------------------------------------------------------------------------
-class RoutingTable
-{
+class RoutingTable {
     // Stores the routes in the format "DEST<expiry:HOP1,HOP2,HOPn"
     private routeTable: Array<string> = [];
     private defaultRoute: string;
 
-    constructor(defaultRoute:string)
-    {
+    constructor(defaultRoute: string) {
         this.defaultRoute = defaultRoute;
     }
 
@@ -18,8 +17,7 @@ class RoutingTable
      * 
      * @returns route oder default route
      */
-    getRouteTo(otherStation:string): string
-    {
+    getRouteTo(otherStation: string): string {
         // Householding
         this.removeExpiredRoutes();
 
@@ -46,16 +44,14 @@ class RoutingTable
      * Adds a route from a path of a packet. This function can be used to add routes from packages 
      * that have been received and that you want to have a return Route
      */
-    addReverseRoutes(path: string, lifetime = 30) 
-    {
+    addReverseRoutes(path: string, lifetime = 30) {
         // The path looks like this "E3*,E5*,E9*,?2-1,XYZ*"
         // This means that we have a route to E3 via E5 -> E9 -> XYZ
 
         //  find the hops that have not been processed yet
         let hops = path.split(",")
 
-        while(hops.length > 1)
-        {
+        while (hops.length > 1) {
             let destination = hops[0].replaceAll("*", "");
 
             hops = hops.slice(1);
@@ -72,8 +68,7 @@ class RoutingTable
 
             // and finally remember the route if it is more than 1 hop (then it would be direct)
             // and if it does not contain the KEY
-            if (route.length > 0 && destination.includes("?") == false)
-            {
+            if (route.length > 0 && destination.includes("?") == false) {
                 this.addRoute(destination, route.join(","));
             }
             hops.reverse();
@@ -87,12 +82,11 @@ class RoutingTable
      * @param route A route in the format "HOP1,HOP2,HOP3"
      * @param lifetime Time in seconds till the route becomes invalid
      */
-    addRoute(otherStation: string, newRoute: string, lifetime = 30)
-    {
+    addRoute(otherStation: string, newRoute: string, lifetime = 30) {
         let i: number;
 
         // Update the route
-        for (i = this.routeTable.length-1; i >= 0; i--) {
+        for (i = this.routeTable.length - 1; i >= 0; i--) {
             let rt: string = this.routeTable.get(i);
 
             let dest: string = rt.split(":")[0];
@@ -101,8 +95,7 @@ class RoutingTable
             let destinationId: string = dest.split("<")[0];
             let expiry: number = parseInt(dest.split("<")[1]);
 
-            if (otherStation == destinationId) 
-            {
+            if (otherStation == destinationId) {
                 this.routeTable.set(i, otherStation + "<" + (control.millis() + lifetime * 1e3).toString() + ":" + newRoute);
                 return;
             }
@@ -115,21 +108,18 @@ class RoutingTable
     /**
      * Deletes the expired routes from the internal routing List.
      */
-    private removeExpiredRoutes()
-    {
-        let i:number;
-        for (i = this.routeTable.length - 1; i >= 0; i--)
-        {
-            let rt:string = this.routeTable.get(i);
-            
-            let dest: string = rt.split(":")[0];
-            let route:string = rt.split(":")[1];
+    private removeExpiredRoutes() {
+        let i: number;
+        for (i = this.routeTable.length - 1; i >= 0; i--) {
+            let rt: string = this.routeTable.get(i);
 
-            let destinationId:string = dest.split("<")[0];
+            let dest: string = rt.split(":")[0];
+            let route: string = rt.split(":")[1];
+
+            let destinationId: string = dest.split("<")[0];
             let expiry: number = parseInt(dest.split("<")[1]);
 
-            if(control.millis() > expiry)
-            {
+            if (control.millis() > expiry) {
                 this.routeTable.removeAt(i);
             }
         }
@@ -142,50 +132,77 @@ class RoutingTable
 /**
  * Packets are Meshinternal information that can be sent an a shared medium like radio
   */
-class Mesh
-{
-    private routes:RoutungTable;
-    private stationID:string; // Name of the mesh node
+class Mesh {
+    private routes: RoutingTable;
+    private stationID: string; // Name of the mesh node
+    private maxPacketSize: number; // How long can a message be ? (depends on the baselayer)
+    private lastError: string; // The last error
 
     /**
      * Creates a meshed System where
      * @param stationID The unique name of the station
      */
-    constructor(stationID:string)
-    {
+    constructor(stationID: string) {
         this.stationID = stationID;
         this.setDefaultRoute("?3-3");
+        this.maxPacketSize = 18; // If we use the radio of the microbit
     }
 
     /**
     * Sets the default routing tbale. A call to this funtion will flush the current routing table
     * and create a new one.
     */
-    setDefaultRoute(defautRoute:string)
-    {
+    setDefaultRoute(defaultRoute: string) {
         this.routes = new RoutingTable(defaultRoute);
     }
-    
+
+    /**
+     * Helper function that indicates that something went wrong
+     */
+    private fail(reason:string):boolean
+    {
+        this.lastError = reason;
+        return false;
+    }
+
+    /**
+     * returns the last error
+     */
+    getLastError():string
+    {
+        return this.lastError;
+    }
+
     /**
      * A simple function that allows to send a message to one microbit
      * 
      * @param destination Station where the message should be sent to
      * @param content Content that should be sent
      */
-    sendMessage(destination: string, payload: string) {
+    sendMessage(destination: string, payload: string):boolean {
         let message: string;
         let route = this.routes.getRouteTo(destination);
+        let header: string;
 
-        if (route.length > 0) 
-        {
-            message = "" + this.stationID + "*," + route + ">" + destination + ":" + payload
+        if (route.length > 0) {
+            header = "" + this.stationID + "*," + route + ">" + destination + ":"
         }
-        else 
-        {
-            message = "" + this.stationID + "*>" + destination + ":" + payload
+        else {
+            header = "" + this.stationID + "*>" + destination + ":"
         }
 
+        let currentPacketSize = header.length + payload.length;
+
+        if (header.length + payload.length > this.maxPacketSize)
+        {
+            // The path consumes the whole header
+            // We can not transmit anything
+            return this.fail("Packet too big");
+        }
+
+        message = header + payload;
         radio.sendString(message)
+        return true;
     }
 
     /**
@@ -195,13 +212,13 @@ class Mesh
      * @param path The paht the message took
      * @param content The payload which was sent
      */
-    onMessageReceived = (source: string, payload: string) => {}
+    onMessageReceived = (source: string, payload: string) => { }
 
     /**
      * A callback method whenever the meshnode should send something.
      * This one should be connected to the radio interface
      */
-    sendPacket = (packet:string) => {};
+    sendPacket = (packet: string) => { };
 
     /**
      * We receive something so lets process this
@@ -225,7 +242,7 @@ class Mesh
         //  Check if we are the destination
         if (destination == this.stationID) {
             //  Yes 
-            
+
             // Remember the route the package took (but in reverse order)
             this.routes.addReverseRoutes(path);
 
@@ -301,15 +318,13 @@ let mesh = new Mesh("HG");
 
 // Connect the Radio interface to the mesh implementation
 radio.onReceivedString(onRadioReceivedString);
-function onRadioReceivedString(packet: string)
-{
-    console.log("recv>" + packet);
+function onRadioReceivedString(packet: string) {
+    console.log("HG <=\t" + packet);
     mesh.processReceivedPacket(packet);
 }
 
-mesh.sendPacket = function (packet: string)
-{
-    console.log("send>" + packet);
+mesh.sendPacket = function (packet: string) {
+    console.log("HG =>\t" + packet);
     radio.sendString(packet);
 }
 
@@ -326,5 +341,8 @@ mesh.onMessageReceived = function (source: string, payload: string) {
 
 // Send a test message
 input.onButtonPressed(Button.A, function on_button_pressed_a() {
-    mesh.sendMessage("HG", "ABC")
+    if(mesh.sendMessage("HG", "ABCDEF") == false)
+    {
+        basic.showString(mesh.getLastError())
+    }
 })
