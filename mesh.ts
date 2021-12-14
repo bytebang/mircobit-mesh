@@ -141,11 +141,12 @@ class Mesh {
     /**
      * Creates a meshed System where
      * @param stationID The unique name of the station
+     * @param the maximum packet size (18 for microbit v2 radio)
      */
-    constructor(stationID: string) {
+    constructor(stationID: string, maxPacketSize=18) {
         this.stationID = stationID;
         this.setDefaultRoute("?3-3");
-        this.maxPacketSize = 18; // If we use the radio of the microbit
+        this.maxPacketSize = maxPacketSize;
     }
 
     /**
