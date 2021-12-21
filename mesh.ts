@@ -177,8 +177,7 @@ class Mesh {
     /**
      * Checks if the message has been relayed yet
      */
-    private hasBeenRelayed(source:string , destination:string , message:string): boolean
-    {
+    private hasBeenRelayed(source: string, destination: string, message: string): boolean {
         return false;
     }
 
@@ -263,7 +262,7 @@ class Mesh {
         //  If we have already passed this message then do not reprocess it
         if (path.includes(this.stationID + "*")) {
             // do nothing (on purpose)   
-            return; 
+            return;
         }
 
         //  find last used stationindex
@@ -305,8 +304,7 @@ class Mesh {
             // Should we act as a relay ?
             if (hops[i].indexOf("?") >= 0) {
 
-                if (this.hasBeenRelayed(source, destination, message))
-                {
+                if (this.hasBeenRelayed(source, destination, message)) {
                     // Do nothing - because we have already relayed the packet
                     return;
                 }
@@ -330,18 +328,20 @@ class Mesh {
     }
 }
 //-------------------------------------------------------------------------------------------
+let myName = "YT";
+let mesh = new Mesh(myName);
 
-let mesh = new Mesh("HG");
+radio.setGroup(42);
 
 // Connect the Radio interface to the mesh implementation
 radio.onReceivedString(onRadioReceivedString);
 function onRadioReceivedString(packet: string) {
-    console.log("HG <=\t" + packet);
+    console.log(myName + " <=\t" + packet);
     mesh.processReceivedPacket(packet);
 }
 
 mesh.sendPacket = function (packet: string) {
-    console.log("HG =>\t" + packet);
+    console.log(myName + " =>\t" + packet);
     radio.sendString(packet);
 }
 
@@ -358,7 +358,7 @@ mesh.onMessageReceived = function (source: string, payload: string) {
 
 // Send a test message
 input.onButtonPressed(Button.A, function on_button_pressed_a() {
-    if (mesh.sendMessage("UP", "ABCDEF") == false) {
+    if (mesh.sendMessage("UP", myName) == false) {
         basic.showString(mesh.getLastError())
     }
 })
