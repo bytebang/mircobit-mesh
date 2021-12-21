@@ -255,6 +255,7 @@ class Mesh {
         //  If we have already passed this message then do not reprocess it
         if (path.includes(this.stationID + "*")) {
             // do nothing (on purpose)    
+            return;
         }
 
         //  find last used stationindex
