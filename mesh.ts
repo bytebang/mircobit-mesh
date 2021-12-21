@@ -138,6 +138,8 @@ class Mesh {
     private maxPacketSize: number; // How long can a message be ? (depends on the baselayer)
     private lastError: string; // The last error
 
+    private relayedMessages: Array<string> = []; // Relayed messages
+
     /**
      * Creates a meshed System where
      * @param stationID The unique name of the station
@@ -170,6 +172,14 @@ class Mesh {
      */
     getLastError(): string {
         return this.lastError;
+    }
+
+    /**
+     * Checks if the message has been relayed yet
+     */
+    private hasBeenRelayed(source:string , destination:string , message:string): boolean
+    {
+        return false;
     }
 
     /**
@@ -236,6 +246,7 @@ class Mesh {
 
         //  find the hops that have not been processed yet
         let hops = path.split(",")
+        let source = hops[0].slice(0, -1);
 
         //  Check if we are the destination
         if (destination == this.stationID) {
@@ -245,7 +256,7 @@ class Mesh {
             this.routes.addReverseRoutes(path);
 
             // and call the callback function
-            this.onMessageReceived(hops[0].slice(0, -1), message)
+            this.onMessageReceived(source, message)
             return;
         }
 
@@ -293,6 +304,13 @@ class Mesh {
 
             // Should we act as a relay ?
             if (hops[i].indexOf("?") >= 0) {
+
+                if (this.hasBeenRelayed(source, destination, message))
+                {
+                    // Do nothing - because we have already relayed the packet
+                    return;
+                }
+
                 //  Wait a little bit
                 basic.pause(Math.random() * 1000)
 
