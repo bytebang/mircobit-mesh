@@ -143,7 +143,7 @@ class Mesh {
      * @param stationID The unique name of the station
      * @param the maximum packet size (18 for microbit v2 radio)
      */
-    constructor(stationID: string, maxPacketSize=18) {
+    constructor(stationID: string, maxPacketSize = 18) {
         this.stationID = stationID;
         this.setDefaultRoute("?3-3");
         this.maxPacketSize = maxPacketSize;
@@ -160,8 +160,7 @@ class Mesh {
     /**
      * Helper function that indicates that something went wrong
      */
-    private fail(reason:string):boolean
-    {
+    private fail(reason: string): boolean {
         this.lastError = reason;
         return false;
     }
@@ -169,8 +168,7 @@ class Mesh {
     /**
      * returns the last error
      */
-    getLastError():string
-    {
+    getLastError(): string {
         return this.lastError;
     }
 
@@ -180,7 +178,7 @@ class Mesh {
      * @param destination Station where the message should be sent to
      * @param content Content that should be sent
      */
-    sendMessage(destination: string, payload: string):boolean {
+    sendMessage(destination: string, payload: string): boolean {
         let message: string;
         let route = this.routes.getRouteTo(destination);
         let header: string;
@@ -194,8 +192,7 @@ class Mesh {
 
         let currentPacketSize = header.length + payload.length;
 
-        if (header.length + payload.length > this.maxPacketSize)
-        {
+        if (header.length + payload.length > this.maxPacketSize) {
             // The path consumes the whole header
             // We can not transmit anything
             return this.fail("Packet too big");
@@ -254,8 +251,8 @@ class Mesh {
 
         //  If we have already passed this message then do not reprocess it
         if (path.includes(this.stationID + "*")) {
-            // do nothing (on purpose)    
-            return;
+            // do nothing (on purpose)   
+            return; 
         }
 
         //  find last used stationindex
@@ -300,8 +297,8 @@ class Mesh {
                 basic.pause(Math.random() * 1000)
 
                 //  Reformat the message
-                relayMax = parseInt(hops[i].slice(5).split("-")[0])
-                relayNow = parseInt(hops[i].slice(5).split("-")[1])
+                relayMax = parseInt(hops[i].slice(1).split("-")[0])
+                relayNow = parseInt(hops[i].slice(1).split("-")[1])
 
                 //  Insert ourself, decemrent the relay counter and retransmit the message
                 hops[i] = this.stationID + "*" + ",?" + relayMax + "-" + (relayNow - 1)
@@ -331,7 +328,7 @@ mesh.sendPacket = function (packet: string) {
 }
 
 // Simulate a received Package
-//mesh.processReceivedString("E3*,E5*,E9,?2-1,XYZ>R7:WASSUP");
+//mesh.processReceivedPacket("E3*,?2-1>R7:WASSUP");
 
 // Callback if the Mesh Network has received a Message
 // This function is called one per Message (which could on the layer below be more than one call)
@@ -343,8 +340,7 @@ mesh.onMessageReceived = function (source: string, payload: string) {
 
 // Send a test message
 input.onButtonPressed(Button.A, function on_button_pressed_a() {
-    if(mesh.sendMessage("HG", "ABCDEF") == false)
-    {
+    if (mesh.sendMessage("UP", "ABCDEF") == false) {
         basic.showString(mesh.getLastError())
     }
 })
