@@ -68,7 +68,7 @@ class RoutingTable {
 
             // and finally remember the route if it is more than 1 hop (then it would be direct)
             // and if it does not contain the KEY
-            if (route.length > 0 && destination.includes("?") == false) {
+            if (route.length > 0 && destination.includes("?") == false && destination.includes("!") == false) {
                 this.addRoute(destination, route.join(","));
             }
             hops.reverse();
@@ -138,7 +138,8 @@ class Mesh {
     private maxPacketSize: number; // How long can a message be ? (depends on the baselayer)
     private lastError: string; // The last error
 
-    private relayedMessages: Array<string> = []; // Relayed messages
+    // Prevention to relay the same message within a timeframe
+    private relayedMessages: Array<string> = []; // Relayed messages. 
 
     /**
      * Creates a meshed System where
@@ -147,7 +148,7 @@ class Mesh {
      */
     constructor(stationID: string, maxPacketSize = 18) {
         this.stationID = stationID;
-        this.setDefaultRoute("?3-3");
+        this.setDefaultRoute("!3-3");
         this.maxPacketSize = maxPacketSize;
     }
 
@@ -178,9 +179,56 @@ class Mesh {
      * Checks if the message has been relayed yet
      */
     private hasBeenRelayed(source: string, destination: string, message: string): boolean {
+        
+        // housekeeping
+        this.removeExpiredRelayInformation();
+
+        // Look for the hash.
+        let currentHash: string = source + ">" + destination + ":" + message;
+
+        let i: number;
+        for (i = this.relayedMessages.length - 1; i >= 0; i--) {
+            let rt: string = this.relayedMessages.get(i);
+
+            let relExpiry: number = parseInt(rt.split("!")[0]);
+            let relHash: string = rt.split("!")[1];
+
+            if (currentHash == relHash) {
+                return true;
+            }
+        }
+
         return false;
     }
 
+    /** 
+     * Inserts the information into the relayhashtable
+     * @param source Name of the sending station
+     * @param destination Name of the target station
+     * @param message message that should be passed from source to destination
+     * @para lifetime how long should we NOT restarnsmit this message
+     */
+    private markAsRelayed(source: string, destination: string, message: string, lifetime = 30) 
+    {
+        this.relayedMessages.push((control.millis() + lifetime * 1e3).toString() + "!" + source + ">" + destination + ":" + message);
+    }
+
+    /**
+     * Deletes the expired routes from the internal relay cache.
+     */
+    private removeExpiredRelayInformation() {
+        let i: number;
+
+        // Format in relayhashes: "expiry!src>dst:msg"
+        for (i = this.relayedMessages.length - 1; i >= 0; i--) {
+            let rt: string = this.relayedMessages.get(i);
+
+            let expiry: number = parseInt(rt.split("!")[0]);
+            if (control.millis() > expiry) {
+                this.relayedMessages.removeAt(i);
+            }
+        }
+    }
     /**
      * A simple function that allows to send a message to one microbit
      * 
@@ -275,7 +323,7 @@ class Mesh {
             }
 
             //  Used relay
-            if (hops[i].includes("?") && hops[i].substr(-2) == "-0") {
+            if ((hops[i].includes("?") || hops[i].includes("!")) && hops[i].substr(-2) == "-0") {
                 lastUsed = Math.max(lastUsed, i)
             }
         }
@@ -301,8 +349,8 @@ class Mesh {
                 break;
             }
 
-            // Should we act as a relay ?
-            if (hops[i].indexOf("?") >= 0) {
+            // Should we act as a relay ? (? and ! would inicate this)
+            if (hops[i].indexOf("?") >= 0 || hops[i].indexOf("!") >= 0) {
 
                 if (this.hasBeenRelayed(source, destination, message)) {
                     // Do nothing - because we have already relayed the packet
@@ -316,8 +364,21 @@ class Mesh {
                 relayMax = parseInt(hops[i].slice(1).split("-")[0])
                 relayNow = parseInt(hops[i].slice(1).split("-")[1])
 
-                //  Insert ourself, decemrent the relay counter and retransmit the message
-                hops[i] = this.stationID + "*" + ",?" + relayMax + "-" + (relayNow - 1)
+                if (hops[i].indexOf("!") >= 0) 
+                {
+                    // We act as a relay where we are not supposed to add our callsign to the List
+                    hops[i] = "!" + relayMax + "-" + (relayNow - 1)
+                }
+                else // Relay with insertion of our own callsign
+                {
+                    //  Insert ourself, decemrent the relay counter and retransmit the message
+                    hops[i] = this.stationID + "*" + ",?" + relayMax + "-" + (relayNow - 1)
+                }
+
+                // Remember the message in order to prevent multiple relay of the same message 
+                this.markAsRelayed(source, destination, message);
+
+                // and relay it
                 newMessage = hops.join(",") + ">" + destination + ":" + message
                 this.sendPacket(newMessage)
 
@@ -328,7 +389,7 @@ class Mesh {
     }
 }
 //-------------------------------------------------------------------------------------------
-let myName = "YT";
+let myName = "R7";
 let mesh = new Mesh(myName);
 
 radio.setGroup(42);
@@ -346,7 +407,7 @@ mesh.sendPacket = function (packet: string) {
 }
 
 // Simulate a received Package
-//mesh.processReceivedPacket("E3*,?2-1>R7:WASSUP");
+mesh.processReceivedPacket("E3*,!2-1>UP:WASSUP");
 
 // Callback if the Mesh Network has received a Message
 // This function is called one per Message (which could on the layer below be more than one call)
