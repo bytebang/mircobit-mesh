@@ -222,9 +222,15 @@ class RoutingTable {
      * @param lifetime Time in seconds till the route becomes invalid
      */
     addRoute(otherStation: string, newRoute: string, lifetime = 30) {
+        this.removeExpiredRoutes();
         let expiry = control.millis() + lifetime * 1000;
         let idx = this.destinations.indexOf(otherStation);
         if (idx >= 0) {
+            // Keep a shorter route that is still valid. A longer one does not even refresh
+            // it - so a broken short route expires and the longer one can take over.
+            if (RoutingTable.hopCount(newRoute) > RoutingTable.hopCount(this.routes[idx])) {
+                return;
+            }
             this.routes[idx] = newRoute;
             this.expiries[idx] = expiry;
             return;
@@ -232,6 +238,16 @@ class RoutingTable {
         this.destinations.push(otherStation);
         this.routes.push(newRoute);
         this.expiries.push(expiry);
+    }
+
+    /**
+     * Number of hops of a route ("" = direct = 0)
+     */
+    static hopCount(route: string): number {
+        if (route.length == 0) {
+            return 0;
+        }
+        return route.split(",").length;
     }
 
     /**
@@ -273,6 +289,12 @@ class Mesh {
     cacheLifetime = 30;
     /** Maximum number of packets waiting in the transmit queue */
     maxQueueLength = 16;
+    /**
+     * Allow shortcuts: if we are listed as a LATER explicit hop and hear the packet
+     * early (the hops in between were skipped), we forward it right away.
+     * Keeps packets alive when a station in the route has gone away.
+     */
+    allowShortcuts = true;
     /**
      * Number of characters of the automatically generated sequence number (base 62).
      * 0 = send without sequence number (duplicate detection by payload, like APRS),
@@ -502,6 +524,10 @@ class Mesh {
             return;
         }
 
+        //  Every station learns from every packet it hears, not only the destination:
+        //  the reversed path is our way back to all stations that sent it
+        this.routes.addReverseRoutes(hops, this.cacheLifetime);
+
         //  Find the last processed hop (used station or exhausted relay)
         let lastUsed = 0;
         for (let i = 0; i < hops.length; i++) {
@@ -521,11 +547,29 @@ class Mesh {
         }
         let hop = hops[next];
 
+        //  Are we an explicit hop ? Normally the next one - with shortcuts also a later
+        //  one (but never beyond a relay token)
+        let myIndex = -1;
+        if (hop == this.stationID) {
+            myIndex = next;
+        }
+        else if (this.allowShortcuts && !meshIsRelayToken(hop)) {
+            for (let j = next + 1; j < hops.length; j++) {
+                if (meshIsRelayToken(hops[j])) {
+                    break;
+                }
+                if (hops[j] == this.stationID) {
+                    myIndex = j;
+                    break;
+                }
+            }
+        }
+
         let newPacket: string;
 
-        if (hop == this.stationID) {
-            // Explicit hop -> mark ourself as used
-            hops[next] = this.stationID + "*";
+        if (myIndex >= 0) {
+            // Explicit hop -> mark ourself as used (skipped hops stay unmarked)
+            hops[myIndex] = this.stationID + "*";
             newPacket = hops.join(",") + ">" + target + ":" + payload;
         }
         else if (meshIsValidRelayToken(hop)) {
