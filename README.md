@@ -208,4 +208,5 @@ The routing logic was tested on a PC: `mesh.ts` with small stubs for `control`, 
 
 ## License
 
-*(add your license here)*
+MIT – free to use, modify and share, also commercially.
+Developed in class together with students at the HTL Leoben.
