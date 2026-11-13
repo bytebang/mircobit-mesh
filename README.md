@@ -14,7 +14,8 @@ Messages travel from micro:bit to micro:bit until they reach their destination. 
 
 - **Source routing**: the sender names the hops explicitly (`R7*,E5,E9>UP:…`)
 - **Flooding with a hop budget**: `?3-3` (each relay adds its callsign) or `!3-3` (anonymous, constant packet size)
-- **Route learning**: the receiver learns the return route from the path a packet took
+- **Route learning**: every node learns return routes from the paths of the packets it hears; shorter routes win
+- **Shortcuts**: if a station in an explicit route is skipped, the next one listening jumps in
 - **Duplicate detection**: an optional sequence number (`#…`), with a fallback to payload comparison (APRS style)
 - **Non-blocking**: forwarding uses a jittered background TX queue, so the receive handler never sleeps
 - **Transport-agnostic**: you plug in `sendPacket` / `processReceivedPacket`. It works with the micro:bit radio, and other transports such as UWB or BLE are possible.
@@ -110,7 +111,7 @@ sequenceDiagram
     D->>C: D*,C,B>A#35;x:y
     C->>B: D*,C*,B>A#35;x:y
     B->>A: D*,C*,B*>A#35;x:y
-    Note over A: delivered<br/>source-routed reply, no flooding
+    Note over A: delivered (no flooding)<br/>learns D via B,C<br/>C via B, B direct
 ```
 
 1. **A** has no route to D yet, so it uses the default route `?3-3`.
@@ -118,9 +119,41 @@ sequenceDiagram
 3. **D** reverses the path and from then on knows how to reach A, B and C.
 4. D's reply no longer floods. It takes exactly the path `C,B`.
 
-Learned routes expire after `cacheLifetime` seconds (default 30).
+### How route learning works
+
+The path of a received packet is a log of the way it came. Reversed, it is the way back:
+
+```
+received path      A* , B* , C* , ?3-1
+                   └───────┬───────┘
+reversed           C , B , A            (C = the station we heard directly)
+
+learned routes     C → direct
+                   B → C
+                   A → C,B
+```
+
+Every station in the path gets an entry. The route to a station consists of all stations that come after it in the path, in reverse order. This only works with `?` relays: with `!` the names are missing, so nothing is learned.
+
+Not only the destination learns: **every station learns from every packet it hears**, as long as it is not in the path itself. In the example above, B learns `A → direct` and C learns `A → B`, `B → direct`. After a little traffic, every node knows the routes to its surroundings.
+
+If a station already knows a route, a **shorter** route replaces it, and a **longer** one is ignored. The longer one does not even refresh the shorter entry, so a broken short route expires after `cacheLifetime` seconds (default 30), and the longer one can take over.
+
+**Interactive demo:** [step through route learning](https://bytebang.github.io/mircobit-mesh/docs/route-learning.html) ([source](docs/route-learning.html))
 
 ---
+
+## Skipped hops and shortcuts
+
+With an explicit route `A*,B,C>D`, different stations can hear the packet earlier than planned:
+
+| Situation | What happens |
+|---|---|
+| D (the destination) hears A directly | D accepts the packet at once and learns `A → direct`. The later copy via B and C is filtered as a duplicate. |
+| C hears A directly (B is skipped) | With `allowShortcuts` (default), C forwards right away: `A*,B,C*>D`. B stays unmarked and is not learned as part of the route. If B forwards later, C drops the copy as a duplicate. This keeps the packet alive when B has gone away. |
+| C hears A directly, `allowShortcuts = false` | C waits for B. If B is gone, the packet is lost. |
+
+A shortcut never jumps past a relay token: `?`/`!` relays are only taken when they are the next open hop.
 
 ## Duplicate detection
 
@@ -170,6 +203,7 @@ Creates a node. An invalid `stationID` triggers `control.panic(801)`.
 | `cacheLifetime` | `30` | Seconds that routes and duplicate entries stay valid |
 | `seqLength` | `1` | Length of the automatic sequence number (0–4 chars, base 62) |
 | `maxQueueLength` | `16` | Maximum number of packets in the TX queue (the oldest is dropped) |
+| `allowShortcuts` | `true` | A station listed as a later explicit hop forwards right away if it hears the packet early (see below) |
 
 ---
 
@@ -208,5 +242,6 @@ The routing logic was tested on a PC: `mesh.ts` with small stubs for `control`, 
 
 ## License
 
-MIT – free to use, modify and share, also commercially.
-Developed in class together with students at the HTL Leoben.
+[MIT](LICENSE) – free to use, modify and share, also commercially.
+
+Developed in class together with a 5th-grade class.
